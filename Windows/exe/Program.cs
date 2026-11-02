@@ -33,6 +33,8 @@ namespace AzFilesSmbMIClient
             TraceMessage($"  --token <token>           - OAuth token (for 'set' command)");
             TraceMessage($"  --clientId <id>           - User managed identity client ID (Azure VM only)");
             TraceMessage($"  --expiry <seconds>        - Time in seconds for refresh operation (default: {DefaultRefreshExpiryInSeconds})");
+            TraceMessage($"  --debug                   - Print OAuth token and base64 Kerberos ticket ('set' and 'refresh')");
+            TraceMessage($"                              WARNING: Exposes sensitive credentials in console output");
             TraceMessage($"");
             TraceMessage($"Examples:");
             TraceMessage($"  AzFilesSmbMIClient.exe set --uri https://myaccount.file.core.windows.net/");
@@ -97,6 +99,7 @@ namespace AzFilesSmbMIClient
             string uri = parameters["uri"];
             string token = parameters.ContainsKey("token") ? parameters["token"] : "";
             string clientId = parameters.ContainsKey("clientId") ? parameters["clientId"] : "";
+            bool debug = parameters.ContainsKey("debug");
             string refreshExpiryInSeconds = parameters.ContainsKey("expiry")
                 ? parameters["expiry"]
                 : DefaultRefreshExpiryInSeconds.ToString();
@@ -123,7 +126,7 @@ namespace AzFilesSmbMIClient
 
                 TraceMessage(loggingMessage.ToString());
 
-                hResult = AzFilesSmbMI.SmbSetCredential(uri, token, clientId, out ulong expiryInSeconds);
+                hResult = AzFilesSmbMI.SmbSetCredential(uri, token, clientId, out uint expiryInSeconds, debug);
 
                 if (AzFilesSmbMIClientErrorCode.Succeeded(hResult))
                 {
@@ -147,7 +150,7 @@ namespace AzFilesSmbMIClient
                     return AzFilesSmbMIClientErrorCode.E_INVALIDARG;
                 }
 
-                hResult = AzFilesSmbMI.SmbRefreshCredential(uri, clientId);
+                hResult = AzFilesSmbMI.SmbRefreshCredential(uri, clientId, debug);
 
                 if (AzFilesSmbMIClientErrorCode.Succeeded(hResult))
                 {

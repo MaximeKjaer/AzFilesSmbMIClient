@@ -3,6 +3,8 @@ LIBRARY      "AzFilesSmbMI.DLL"
 EXPORTS
     SmbSetCredential
     SmbRefreshCredential
+    SmbSetCredentialWithDebug
+    SmbRefreshCredentialWithDebug
     SmbWaitForRefreshFailure
     SmbClearCredential
     

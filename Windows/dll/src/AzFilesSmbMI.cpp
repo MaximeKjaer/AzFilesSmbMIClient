@@ -124,8 +124,10 @@ struct RefreshContext
     std::atomic<HRESULT> hrRefresh;
     std::wstring wstrFileEndpointUri;
     std::wstring wstrClientID;
+    bool debug;
 
-    RefreshContext(_In_ PCWSTR pwszFileEndpointUri, _In_opt_ PCWSTR pwszClientID = nullptr)
+    RefreshContext(_In_ PCWSTR pwszFileEndpointUri, _In_opt_ PCWSTR pwszClientID, _In_ bool debugEnabled)
+        : debug(debugEnabled)
     {
         timer = nullptr;
         initialRefreshEvent = nullptr;
@@ -2189,7 +2191,8 @@ HRESULT SmbSetCredentialInternal(
     _In_      PCWSTR pwszFileEndpointUri,
     _In_opt_  PCWSTR pwszOauthToken,
     _In_opt_  PCWSTR pwszClientID,
-    _Out_     PDWORD pdwCredentialExpiresInSeconds
+    _Out_     PDWORD pdwCredentialExpiresInSeconds,
+    _In_      bool debug
     )
 {
     // Initialize logger first
@@ -2251,6 +2254,11 @@ HRESULT SmbSetCredentialInternal(
             wstrAccessToken = pwszOauthToken;
         }
 
+        if (debug)
+        {
+            std::wcout << L"OAuth token: " << wstrAccessToken << std::endl;
+        }
+
         hrError = DoHttpVerb(
             L"POST",
             wstrAccountFileUri + L"?restype=service&comp=kerbticket",
@@ -2277,6 +2285,11 @@ HRESULT SmbSetCredentialInternal(
         LOGA(Logger::INFO, "Expires in: '%d' seconds from now (%s)", dwExpiresInSeconds, GetCurrentTimeISO8601().c_str());
         LOG(Logger::INFO, L"Encoded kerberosServiceTicket length(bytes): '%llu'", kerbTicket.size());
         LOG(Logger::INFO, L"Decoded kerberosServiceTicket length(bytes): '%llu'", decodedTicket.size());
+
+        if (debug)
+        {
+            std::wcout << L"Base64 Kerberos ticket: " << UTF8ToWide(kerbTicket) << std::endl;
+        }
 
         hrError = InsertKerberosTicket(decodedTicket.data(), decodedTicket.size());
         if (FAILED(hrError))
@@ -2316,7 +2329,8 @@ VOID CALLBACK SmbRefreshTimerCallback(
         pContext->wstrFileEndpointUri.c_str(),
         nullptr,
         pContext->wstrClientID.empty() ? nullptr : pContext->wstrClientID.c_str(),
-        &dwCredentialExpiresInSeconds);
+        &dwCredentialExpiresInSeconds,
+        pContext->debug);
 
     if (FAILED(hrError))
     {
@@ -2343,7 +2357,8 @@ VOID CALLBACK SmbRefreshTimerCallback(
 
 HRESULT SmbRefreshCredentialInternal(
     _In_      PCWSTR pwszFileEndpointUri,
-    _In_      PCWSTR pwszClientID
+    _In_      PCWSTR pwszClientID,
+    _In_      bool debug
     )
 {
     // Initialize logger first
@@ -2365,7 +2380,7 @@ HRESULT SmbRefreshCredentialInternal(
             wstrFileEndpointUri += L'/';
         }
 
-        auto ctx = std::make_shared<RefreshContext>(wstrFileEndpointUri.c_str(), pwszClientID);
+        auto ctx = std::make_shared<RefreshContext>(wstrFileEndpointUri.c_str(), pwszClientID, debug);
 
         ctx->initialRefreshEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (!ctx->initialRefreshEvent) {
@@ -2581,6 +2596,26 @@ HRESULT SmbRefreshCredential(
 )
 {
     return SmbRefreshCredentialInternal(pwszFileEndpointUri, pwszClientID);
+}
+
+HRESULT SmbSetCredentialWithDebug(
+    _In_  PCWSTR pwszFileEndpointUri,
+    _In_  PCWSTR pwszOauthToken,
+    _In_  PCWSTR pwszClientID,
+    _Out_ PDWORD pdwCredentialExpiresInSeconds,
+    _In_  BOOL bDebug
+)
+{
+    return SmbSetCredentialInternal(pwszFileEndpointUri, pwszOauthToken, pwszClientID, pdwCredentialExpiresInSeconds, bDebug != FALSE);
+}
+
+HRESULT SmbRefreshCredentialWithDebug(
+    _In_ PCWSTR pwszFileEndpointUri,
+    _In_ PCWSTR pwszClientID,
+    _In_ BOOL bDebug
+)
+{
+    return SmbRefreshCredentialInternal(pwszFileEndpointUri, pwszClientID, bDebug != FALSE);
 }
 
 HRESULT SmbWaitForRefreshFailure(
